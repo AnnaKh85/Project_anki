@@ -45,13 +45,8 @@ def build_fields(word: str):
     translation = lookups.translate(word_with_article)
     logger.info("     слово: %r, перевод: %r", word_with_article, translation)
 
-    logger.info("  -> ищу пример предложения (Tatoeba)...")
-    sentence = lookups.find_example_sentence(word_with_article)
-    sentence_translation = lookups.translate(sentence) if sentence else ""
-    if sentence:
-        logger.info("     предложение: %r", sentence)
-    else:
-        logger.info("     предложение не найдено")
+    logger.info("  -> генерирую предложение (Groq AI)...")
+    sentence, sentence_translation = lookups.generate_sentence_and_translation(word_with_article)
 
     needs_review = []
     if word_with_article == word and word[:1].isupper() and " " not in word:
