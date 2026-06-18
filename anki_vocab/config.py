@@ -33,6 +33,12 @@ TAG_YOMITAN = "yomitan"           # уже стоит на карточках и
 TAG_ENRICHED = "enriched"         # карточка Yomitan уже дозаполнена скриптом 2
 TAG_NEEDS_REVIEW = "needs-review"  # что-то не нашлось автоматически — проверить руками
 
+# --- Groq AI (бесплатный ключ: https://console.groq.com) ---
+# Поместите ключ в переменную окружения GROQ_API_KEY или вставьте прямо сюда.
+import os as _os
+GROQ_API_KEY: str = _os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = "llama3-8b-8192"  # бесплатная модель с хорошим немецким
+
 # --- Вежливая задержка между обращениями к бесплатным публичным API (сек) ---
 REQUEST_DELAY = 0.8
 
