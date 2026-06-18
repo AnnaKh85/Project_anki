@@ -74,27 +74,9 @@ def build_fields(word: str):
 def attach_media(fields: dict, bare_word: str, sentence: str, needs_review: list):
     safe = "".join(c for c in bare_word if c.isalnum()) or "word"
 
-    logger.info("  -> генерирую озвучку слова (edge-tts)...")
-    audio = lookups.synthesize_tts(bare_word)
-    if audio:
-        filename = f"{safe}_word.mp3"
-        ac.store_media_file(filename, lookups.b64(audio))
-        fields[config.FIELD_WORD_AUDIO] = f"[sound:{filename}]"
-        logger.info("     готово: %s", filename)
-    else:
-        logger.info("     не удалось озвучить слово")
-        needs_review.append("word_audio")
-
-    if sentence:
-        logger.info("  -> генерирую озвучку предложения...")
-        s_audio = lookups.synthesize_tts(sentence)
-        if s_audio:
-            filename = f"{safe}_sentence.mp3"
-            ac.store_media_file(filename, lookups.b64(s_audio))
-            fields[config.FIELD_SENTENCE_AUDIO] = f"[sound:{filename}]"
-            logger.info("     готово: %s", filename)
-        else:
-            logger.info("     не удалось озвучить предложение")
+    logger.info("  -> озвучка отключена, поля WordAudio/SentenceAudio будут пустыми")
+    needs_review.append("word_audio")
+    needs_review.append("sentence_audio")
 
     logger.info("  -> ищу картинку (Openverse)...")
     image = lookups.find_image_bytes(bare_word)
