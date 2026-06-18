@@ -187,24 +187,34 @@ def find_image_bytes(query: str) -> Optional[bytes]:
 def synthesize_tts(text: str) -> Optional[bytes]:
     if not text:
         return None
-    logger.debug("edge-tts: озвучиваю %r", text[:60])
-    import edge_tts
+    logger.info("edge-tts: озвучиваю %r", text[:60])
+    try:
+        import edge_tts
+        logger.info("edge-tts: библиотека импортирована успешно")
+    except ImportError as e:
+        logger.warning("edge-tts: не удалось импортировать библиотеку: %s", e)
+        return None
 
     async def _run(path):
+        logger.info("edge-tts: создаю Communicate, голос=%r", config.TTS_VOICE_DE)
         communicate = edge_tts.Communicate(text, config.TTS_VOICE_DE)
+        logger.info("edge-tts: вызываю communicate.save('%s')...", path)
         await asyncio.wait_for(communicate.save(path), timeout=20)
+        logger.info("edge-tts: communicate.save завершён")
 
     path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             path = f.name
+        logger.info("edge-tts: запускаю asyncio.run (временный файл: %s)", path)
         asyncio.run(_run(path))
+        logger.info("edge-tts: asyncio.run завершён")
         with open(path, "rb") as f:
             data = f.read()
-        logger.debug("edge-tts: готово (%d байт) для %r", len(data) if data else 0, text[:60])
+        logger.info("edge-tts: файл прочитан, %d байт", len(data) if data else 0)
         return data if data else None
-    except Exception as e:
-        logger.debug("edge-tts: ошибка для %r: %s", text[:60], e)
+    except BaseException as e:
+        logger.warning("edge-tts: ошибка (%s) для %r: %s", type(e).__name__, text[:60], e)
         return None
     finally:
         if path and os.path.exists(path):
