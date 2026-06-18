@@ -1,3 +1,4 @@
 requests
 deep-translator
 edge-tts
+groq

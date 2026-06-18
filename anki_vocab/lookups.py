@@ -4,7 +4,7 @@
 
 - перевод            -> deep-translator (Google Translate без API-ключа)
 - род существительного -> de.wiktionary.org (MediaWiki API)
-- пример предложения  -> tatoeba.org (api_v0)
+- пример предложения  -> Groq AI (бесплатный ключ на console.groq.com)
 - картинка            -> Openverse API (только CC-лицензии, без ключа)
 - озвучка             -> edge-tts (голоса Microsoft Edge, без ключа)
 
@@ -14,7 +14,6 @@
 """
 import asyncio
 import base64
-import html
 import logging
 import os
 import re
@@ -124,34 +123,61 @@ def ensure_article(word: str) -> str:
     return word  # не удалось определить — оставляем как есть (на ревью)
 
 
-# ---------- Пример предложения (Tatoeba) ----------
+# ---------- Пример предложения + перевод (Groq AI) ----------
 
-def find_example_sentence(word: str) -> Optional[str]:
-    """Возвращает немецкое предложение, содержащее слово, или None."""
+def generate_sentence_and_translation(word: str) -> tuple[str, str]:
+    """
+    Генерирует немецкое предложение уровня A1-B1 с данным словом
+    и его перевод на русский. Возвращает (sentence, translation).
+    При ошибке возвращает ("", "").
+    """
+    if not config.GROQ_API_KEY:
+        logger.warning("Groq: GROQ_API_KEY не задан — предложение не будет сгенерировано. "
+                       "Получите бесплатный ключ на https://console.groq.com и задайте "
+                       "переменную окружения GROQ_API_KEY.")
+        return "", ""
+
     bare = bare_word(word)
-    logger.debug("Tatoeba: ищу предложение для %r", bare)
+    logger.info("Groq: генерирую предложение для %r", bare)
+
+    prompt = (
+        f'Составь одно простое немецкое предложение уровня A1-B1, '
+        f'в котором используется слово "{bare}". '
+        f'Ответь строго в формате двух строк:\n'
+        f'DE: <немецкое предложение>\n'
+        f'RU: <перевод на русский>'
+    )
+
     try:
-        resp = requests.get(
-            "https://tatoeba.org/eng/api_v0/search",
-            params={"from": "deu", "query": bare},
-            headers=HEADERS,
-            timeout=10,
+        from groq import Groq
+        client = Groq(api_key=config.GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model=config.GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=120,
+            temperature=0.4,
         )
-        resp.raise_for_status()
-        results = resp.json().get("results", [])
-        candidates = [
-            html.unescape(r["text"])
-            for r in results
-            if bare.lower() in r.get("text", "").lower()
-        ]
-        candidates.sort(key=len)  # короче — обычно ближе к A1-B1
-        if candidates:
-            logger.debug("Tatoeba: найдено %d вариантов для %r, беру самый короткий", len(candidates), bare)
-            return candidates[0]
-        logger.debug("Tatoeba: для %r подходящих предложений не найдено", bare)
+        text = response.choices[0].message.content.strip()
+        logger.info("Groq: ответ получен")
+        logger.debug("Groq raw: %r", text)
+
+        sentence, translation = "", ""
+        for line in text.splitlines():
+            if line.startswith("DE:"):
+                sentence = line[3:].strip()
+            elif line.startswith("RU:"):
+                translation = line[3:].strip()
+
+        if sentence:
+            logger.info("Groq: предложение: %r", sentence)
+            logger.info("Groq: перевод:     %r", translation)
+            return sentence, translation
+
+        logger.warning("Groq: не удалось разобрать ответ: %r", text)
     except Exception as e:
-        logger.debug("Tatoeba: ошибка для %r: %s", bare, e)
-    return None
+        logger.warning("Groq: ошибка для %r: %s", bare, e)
+
+    return "", ""
 
 
 # ---------- Картинка (Openverse) ----------
