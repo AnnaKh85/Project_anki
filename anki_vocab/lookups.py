@@ -192,7 +192,7 @@ def synthesize_tts(text: str) -> Optional[bytes]:
 
     async def _run(path):
         communicate = edge_tts.Communicate(text, config.TTS_VOICE_DE)
-        await communicate.save(path)
+        await asyncio.wait_for(communicate.save(path), timeout=20)
 
     path = None
     try:
