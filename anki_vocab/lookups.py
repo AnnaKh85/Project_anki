@@ -154,8 +154,7 @@ def generate_sentence_and_translation(word: str) -> tuple[str, str]:
         response = client.chat.completions.create(
             model=config.GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=120,
-            temperature=0.4,
+            max_completion_tokens=256,
         )
         text = response.choices[0].message.content.strip()
         logger.info("Groq: ответ получен")
