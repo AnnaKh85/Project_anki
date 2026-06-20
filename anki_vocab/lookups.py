@@ -149,7 +149,7 @@ def generate_sentence_and_translation(word: str) -> tuple[str, str]:
     logger.info("Groq: генерирую предложение для %r", bare)
 
     prompt = (
-        f'Составь одно простое немецкое предложение уровня A1-B1, '
+        f'Составь одно простое немецкое предложение уровня A2-B1, '
         f'в котором используется слово "{bare}". '
         f'Ответь строго в формате двух строк:\n'
         f'DE: <немецкое предложение>\n'
@@ -221,20 +221,36 @@ def synthesize_tts(text: str) -> Optional[bytes]:
     """Генерирует MP3 через Google Translate TTS (тот же сервис, что AwesomeTTS)."""
     if not text:
         return None
-    logger.info("gTTS: озвучиваю %r", text[:60])
+    logger.info("edge-tts: озвучиваю %r", text[:60])
+    try:
+        import edge_tts
+        logger.info("edge-tts: библиотека импортирована успешно")
+    except ImportError as e:
+        logger.warning("edge-tts: не удалось импортировать библиотеку: %s", e)
+        return None
+
+    async def _run(path):
+        logger.info("edge-tts: создаю Communicate, голос=%r", config.TTS_VOICE_DE)
+        communicate = edge_tts.Communicate(text, config.TTS_VOICE_DE)
+        logger.info("edge-tts: вызываю communicate.save('%s')...", path)
+        await asyncio.wait_for(communicate.save(path), timeout=20)
+        logger.info("edge-tts: communicate.save завершён")
+
     path = None
     try:
         from gtts import gTTS
         tts = gTTS(text=text, lang="de", slow=False)
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             path = f.name
-        tts.save(path)
+        logger.info("edge-tts: запускаю asyncio.run (временный файл: %s)", path)
+        asyncio.run(_run(path))
+        logger.info("edge-tts: asyncio.run завершён")
         with open(path, "rb") as f:
             data = f.read()
-        logger.info("gTTS: готово (%d байт)", len(data) if data else 0)
+        logger.info("edge-tts: файл прочитан, %d байт", len(data) if data else 0)
         return data if data else None
-    except Exception as e:
-        logger.warning("gTTS: ошибка для %r: %s", text[:60], e)
+    except BaseException as e:
+        logger.warning("edge-tts: ошибка (%s) для %r: %s", type(e).__name__, text[:60], e)
         return None
     finally:
         if path and os.path.exists(path):

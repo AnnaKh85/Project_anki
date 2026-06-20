@@ -139,22 +139,25 @@ def main():
 
         try:
             fields, needs_review, bare = build_fields(word)
+            logger.info("  -> build_fields завершён, запускаю attach_media...")
             attach_media(fields, bare, fields[config.FIELD_SENTENCE], needs_review)
+            logger.info("  -> attach_media завершён")
 
             tags = [config.TAG_AUTO_SHEET]
             if needs_review:
                 tags.append(config.TAG_NEEDS_REVIEW)
 
             logger.info("  -> сохраняю карточку в Anki...")
-            ac.add_note(fields, tags)
+            note_id = ac.add_note(fields, tags)
+            logger.info("  -> add_note вернул note_id=%s", note_id)
             added += 1
             note = " (на проверку: " + ", ".join(needs_review) + ")" if needs_review else ""
             logger.info("  + Добавлено: %s%s", fields[config.FIELD_WORD], note)
         except ac.AnkiConnectError as e:
             logger.error("Ошибка Anki для %r: %s", word, e)
             failed += 1
-        except Exception as e:
-            logger.exception("Не удалось обработать %r: %s", word, e)
+        except BaseException as e:
+            logger.exception("Не удалось обработать %r (%s): %s", word, type(e).__name__, e)
             failed += 1
 
         time.sleep(config.REQUEST_DELAY)  # вежливая пауза для бесплатных API
