@@ -37,6 +37,24 @@ def enrich_note(nid: int, fields: dict) -> list[str]:
     updated = {}
     needs_review = []
 
+    # --- Word: артикль + множественное число для существительных ---
+    parts = word.split()
+    already_has_article = parts[0].lower() in ("der", "die", "das") if parts else False
+    if not already_has_article and word[:1].isupper() and len(parts) == 1:
+        logger.info("  -> проверяю артикль и мн.ч. для существительного %r...", word)
+        word_enriched = lookups.ensure_article(word)
+        if word_enriched != word:
+            updated[config.FIELD_WORD] = word_enriched
+            word = word_enriched
+            bare = lookups.bare_word(word)
+            safe = "".join(c for c in bare if c.isalnum()) or "word"
+            logger.info("     обновлено: %r", word_enriched)
+        else:
+            needs_review.append("genus")
+            logger.info("     артикль не определён, оставляю как есть")
+    else:
+        logger.info("  -> Word уже содержит артикль или не существительное, пропускаю")
+
     # --- Sentence + SentenceTranslation ---
     current_sentence = fields.get(config.FIELD_SENTENCE, "").strip()
     if not current_sentence:
