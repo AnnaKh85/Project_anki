@@ -12,6 +12,7 @@
 исключение наверх. Так один неудачный запрос не обрывает обработку всего
 списка слов — такие места просто помечаются тегом needs-review.
 """
+import asyncio
 import base64
 import logging
 import os
