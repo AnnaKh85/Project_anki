@@ -3,6 +3,11 @@
 Общие настройки конвейера автоматического заполнения Anki.
 Поменяйте значения здесь — остальной код их не трогает.
 """
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Anki / AnkiConnect ---
 ANKICONNECT_URL = "http://127.0.0.1:8765"
@@ -34,16 +39,13 @@ TAG_ENRICHED = "enriched"         # карточка Yomitan уже дозапо
 TAG_NEEDS_REVIEW = "needs-review"  # что-то не нашлось автоматически — проверить руками
 
 # --- Groq AI (бесплатный ключ: https://console.groq.com) ---
-# Поместите ключ в переменную окружения GROQ_API_KEY или вставьте прямо сюда.
-import os as _os
-GROQ_API_KEY: str = _os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = "qwen/qwen3-32b"  # протестированная модель
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 # --- Вежливая задержка между обращениями к бесплатным публичным API (сек) ---
 REQUEST_DELAY = 0.8
 
 # --- Google Sheet (источник для скрипта 1) ---
-# Ссылка на CSV-экспорт публичного листа. Как получить — см. README,
-# раздел "Настройка Google Sheet".
+# Ссылка на CSV-экспорт публичного листа
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT_GQ6wVpMp2pob0g2NQs8Wf4DXHvKdGwtye4DJM0Ok47QQb3lnCUPtr-SzrKseY7A6aMtQxeF3LL4R/pub?gid=0&single=true&output=csv"
 SHEET_WORD_COLUMN = "word"  # название колонки в таблице, где лежат немецкие слова
