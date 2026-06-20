@@ -59,16 +59,22 @@ def translate(text: str, target: str = config.TARGET_LANG) -> str:
 
 # ---------- Род существительного ----------
 
-def lookup_genus(word: str) -> Optional[str]:
-    """Возвращает 'der'/'die'/'das' через Groq или None, если не существительное."""
+def lookup_noun_forms(word: str) -> Optional[tuple[str, str]]:
+    """
+    Возвращает (артикль, множественное_число) для существительного через Groq,
+    или None если слово не существительное или запрос не удался.
+    Пример: 'Buch' -> ('das', 'die Bücher')
+    """
     if not config.GROQ_API_KEY:
         logger.warning("Groq: GROQ_API_KEY не задан — артикль не будет определён.")
         return None
 
-    logger.info("Groq: определяю артикль для %r", word)
+    logger.info("Groq: определяю артикль и мн.ч. для %r", word)
     prompt = (
         f'Немецкое слово: "{word}"\n'
-        f'Если это существительное, ответь только одним словом: der, die или das.\n'
+        f'Если это существительное, ответь строго в формате двух строк:\n'
+        f'ART: <der/die/das>\n'
+        f'PLU: die <форма множественного числа>\n'
         f'Если это не существительное — ответь только: нет.'
     )
     try:
@@ -77,22 +83,33 @@ def lookup_genus(word: str) -> Optional[str]:
         response = client.chat.completions.create(
             model=config.GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_completion_tokens=10,
+            max_completion_tokens=30,
         )
-        answer = response.choices[0].message.content.strip().lower().split()[0]
-        if answer in ("der", "die", "das"):
-            logger.info("Groq: артикль для %r -> %s", word, answer)
-            return answer
-        logger.info("Groq: %r — не существительное (ответ: %r)", word, answer)
+        text = response.choices[0].message.content.strip()
+        logger.debug("Groq noun forms raw: %r", text)
+
+        article, plural = "", ""
+        for line in text.splitlines():
+            if line.startswith("ART:"):
+                article = line[4:].strip().lower()
+            elif line.startswith("PLU:"):
+                plural = line[4:].strip()
+
+        if article in ("der", "die", "das"):
+            logger.info("Groq: %r -> %s, мн.ч.: %s", word, article, plural)
+            return article, plural
+
+        logger.info("Groq: %r — не существительное (ответ: %r)", word, text)
     except Exception as e:
-        logger.warning("Groq: ошибка определения артикля для %r: %s", word, e)
+        logger.warning("Groq: ошибка определения форм для %r: %s", word, e)
     return None
 
 
 def ensure_article(word: str) -> str:
     """
     Если word — существительное без артикля (с большой буквы, одно слово),
-    пытается определить род и приставить der/die/das.
+    определяет род и множественное число через Groq.
+    Возвращает строку вида 'das Buch, die Bücher'.
     Если артикль уже есть, слово многословное или это не существительное —
     возвращает word без изменений.
     """
@@ -106,9 +123,12 @@ def ensure_article(word: str) -> str:
         return word  # многословное выражение — не трогаем
     if not word[0].isupper():
         return word  # по орфографии немецкого — не существительное
-    genus = lookup_genus(word)
-    if genus:
-        return f"{genus} {word}"
+    forms = lookup_noun_forms(word)
+    if forms:
+        article, plural = forms
+        if plural:
+            return f"{article} {word}, {plural}"
+        return f"{article} {word}"
     return word  # не удалось определить — оставляем как есть (на ревью)
 
 
