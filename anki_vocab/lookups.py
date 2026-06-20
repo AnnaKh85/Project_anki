@@ -16,7 +16,6 @@ import asyncio
 import base64
 import logging
 import os
-import re
 import socket
 import tempfile
 from typing import Optional
@@ -60,43 +59,33 @@ def translate(text: str, target: str = config.TARGET_LANG) -> str:
 
 # ---------- Род существительного ----------
 
-_GENUS_MAP = {"m": "der", "f": "die", "n": "das"}
-
-
 def lookup_genus(word: str) -> Optional[str]:
-    """Возвращает 'der'/'die'/'das' или None, если не удалось определить."""
-    logger.debug("Wiktionary: ищу род для %r", word)
+    """Возвращает 'der'/'die'/'das' через Groq или None, если не существительное."""
+    if not config.GROQ_API_KEY:
+        logger.warning("Groq: GROQ_API_KEY не задан — артикль не будет определён.")
+        return None
+
+    logger.info("Groq: определяю артикль для %r", word)
+    prompt = (
+        f'Немецкое слово: "{word}"\n'
+        f'Если это существительное, ответь только одним словом: der, die или das.\n'
+        f'Если это не существительное — ответь только: нет.'
+    )
     try:
-        resp = requests.get(
-            "https://de.wiktionary.org/w/api.php",
-            params={
-                "action": "query",
-                "titles": word,
-                "prop": "revisions",
-                "rvprop": "content",
-                "rvslots": "main",
-                "format": "json",
-            },
-            headers=HEADERS,
-            timeout=10,
+        from groq import Groq
+        client = Groq(api_key=config.GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model=config.GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_completion_tokens=10,
         )
-        resp.raise_for_status()
-        pages = resp.json()["query"]["pages"]
-        page = next(iter(pages.values()))
-        if "missing" in page:
-            logger.debug("Wiktionary: статья %r не найдена", word)
-            return None
-        wikitext = page["revisions"][0]["slots"]["main"]["*"]
-        m = re.search(r"Substantiv[^\n}]*Genus=([mfn])", wikitext)
-        if not m:
-            m = re.search(r"\bGenus=([mfn])\b", wikitext)
-        if m:
-            genus = _GENUS_MAP[m.group(1)]
-            logger.debug("Wiktionary: %r -> %s", word, genus)
-            return genus
-        logger.debug("Wiktionary: род для %r не распознан в тексте статьи", word)
+        answer = response.choices[0].message.content.strip().lower().split()[0]
+        if answer in ("der", "die", "das"):
+            logger.info("Groq: артикль для %r -> %s", word, answer)
+            return answer
+        logger.info("Groq: %r — не существительное (ответ: %r)", word, answer)
     except Exception as e:
-        logger.debug("Wiktionary: ошибка для %r: %s", word, e)
+        logger.warning("Groq: ошибка определения артикля для %r: %s", word, e)
     return None
 
 
