@@ -12,7 +12,6 @@
 исключение наверх. Так один неудачный запрос не обрывает обработку всего
 списка слов — такие места просто помечаются тегом needs-review.
 """
-import asyncio
 import base64
 import logging
 import os
@@ -216,29 +215,26 @@ def find_image_bytes(query: str) -> Optional[bytes]:
     return None
 
 
-# ---------- Озвучка (edge-tts) ----------
+# ---------- Озвучка (gTTS — Google Translate TTS, без API ключа) ----------
 
 def synthesize_tts(text: str) -> Optional[bytes]:
+    """Генерирует MP3 через Google Translate TTS (тот же сервис, что AwesomeTTS)."""
     if not text:
         return None
-    logger.debug("edge-tts: озвучиваю %r", text[:60])
-    import edge_tts
-
-    async def _run(path):
-        communicate = edge_tts.Communicate(text, config.TTS_VOICE_DE)
-        await communicate.save(path)
-
+    logger.info("gTTS: озвучиваю %r", text[:60])
     path = None
     try:
+        from gtts import gTTS
+        tts = gTTS(text=text, lang="de", slow=False)
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             path = f.name
-        asyncio.run(_run(path))
+        tts.save(path)
         with open(path, "rb") as f:
             data = f.read()
-        logger.debug("edge-tts: готово (%d байт) для %r", len(data) if data else 0, text[:60])
+        logger.info("gTTS: готово (%d байт)", len(data) if data else 0)
         return data if data else None
     except Exception as e:
-        logger.debug("edge-tts: ошибка для %r: %s", text[:60], e)
+        logger.warning("gTTS: ошибка для %r: %s", text[:60], e)
         return None
     finally:
         if path and os.path.exists(path):
