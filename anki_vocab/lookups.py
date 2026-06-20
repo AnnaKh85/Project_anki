@@ -12,7 +12,6 @@
 исключение наверх. Так один неудачный запрос не обрывает обработку всего
 списка слов — такие места просто помечаются тегом needs-review.
 """
-import asyncio
 import base64
 import logging
 import os
@@ -216,9 +215,10 @@ def find_image_bytes(query: str) -> Optional[bytes]:
     return None
 
 
-# ---------- Озвучка (edge-tts) ----------
+# ---------- Озвучка (gTTS — Google Translate TTS, без API ключа) ----------
 
 def synthesize_tts(text: str) -> Optional[bytes]:
+    """Генерирует MP3 через Google Translate TTS (тот же сервис, что AwesomeTTS)."""
     if not text:
         return None
     logger.info("edge-tts: озвучиваю %r", text[:60])
@@ -238,6 +238,8 @@ def synthesize_tts(text: str) -> Optional[bytes]:
 
     path = None
     try:
+        from gtts import gTTS
+        tts = gTTS(text=text, lang="de", slow=False)
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             path = f.name
         logger.info("edge-tts: запускаю asyncio.run (временный файл: %s)", path)
