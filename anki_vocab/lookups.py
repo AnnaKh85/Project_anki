@@ -136,7 +136,7 @@ def ensure_article(word: str) -> str:
 
 def generate_sentence_and_translation(word: str) -> tuple[str, str]:
     """
-    Генерирует немецкое предложение уровня A1-B1 с данным словом
+    Генерирует немецкое предложение уровня A2-B1 с данным словом
     и его перевод на русский. Возвращает (sentence, translation).
     При ошибке возвращает ("", "").
     """
