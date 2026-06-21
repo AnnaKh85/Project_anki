@@ -29,6 +29,7 @@ def fetch_sheet_words():
     logger.info("Загружаю список слов из Google Sheet...")
     resp = requests.get(config.SHEET_CSV_URL, timeout=20)
     resp.raise_for_status()
+    resp.encoding = "utf-8"
     reader = csv.DictReader(io.StringIO(resp.text))
     words = []
     for row in reader:
