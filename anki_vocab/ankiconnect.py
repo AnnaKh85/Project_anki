@@ -58,10 +58,21 @@ def notes_info(note_ids):
     return invoke("notesInfo", notes=note_ids)
 
 
+def find_word_notes(bare_word: str) -> list:
+    """Возвращает список notesInfo для карточек с данным словом (без артикля)."""
+    query = f'note:"{config.MODEL_NAME}" {config.FIELD_WORD}:*{bare_word}*'
+    note_ids = find_notes(query)
+    return notes_info(note_ids)
+
+
 def word_exists(bare_word: str) -> bool:
     """Проверяет, есть ли уже карточка с таким словом (без учёта артикля)."""
     query = f'note:"{config.MODEL_NAME}" {config.FIELD_WORD}:*{bare_word}*'
     return len(find_notes(query)) > 0
+
+
+def remove_tags(note_ids, tags: str):
+    invoke("removeTags", notes=note_ids, tags=tags)
 
 
 def add_note(fields: dict, tags: list) -> Optional[int]:

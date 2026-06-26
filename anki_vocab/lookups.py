@@ -63,6 +63,7 @@ def lookup_noun_forms(word: str) -> Optional[tuple[str, str]]:
     Возвращает (артикль, множественное_число) для существительного через Groq,
     или None если слово не существительное или запрос не удался.
     Пример: 'Buch' -> ('das', 'die Bücher')
+    Пример без мн.ч.: 'Obst' -> ('das', '')
     """
     if not config.GROQ_API_KEY:
         logger.warning("Groq: GROQ_API_KEY не задан — артикль не будет определён.")
@@ -74,6 +75,8 @@ def lookup_noun_forms(word: str) -> Optional[tuple[str, str]]:
         f'Если это существительное, ответь строго в формате двух строк:\n'
         f'ART: <der/die/das>\n'
         f'PLU: die <форма множественного числа>\n'
+        f'Если у существительного нет формы множественного числа (например, das Obst, das Wasser) — '
+        f'напиши PLU: нет\n'
         f'Если это не существительное — ответь только: нет.'
     )
     try:
@@ -92,10 +95,17 @@ def lookup_noun_forms(word: str) -> Optional[tuple[str, str]]:
             if line.startswith("ART:"):
                 article = line[4:].strip().lower()
             elif line.startswith("PLU:"):
-                plural = line[4:].strip()
+                plu_val = line[4:].strip()
+                plu_lower = plu_val.lower()
+                if plu_lower in ("нет", "keine", "kein", "-", "—", ""):
+                    plural = ""  # нет формы множественного числа
+                elif plu_lower.startswith("die ") and len(plu_val) > 4:
+                    plural = plu_val  # правильный формат: "die Bücher"
+                elif plu_val:
+                    plural = f"die {plu_val}"  # Groq забыл артикль — добавляем
 
         if article in ("der", "die", "das"):
-            logger.info("Groq: %r -> %s, мн.ч.: %s", word, article, plural)
+            logger.info("Groq: %r -> %s, мн.ч.: %r", word, article, plural or "нет")
             return article, plural
 
         logger.info("Groq: %r — не существительное (ответ: %r)", word, text)
@@ -106,29 +116,46 @@ def lookup_noun_forms(word: str) -> Optional[tuple[str, str]]:
 
 def ensure_article(word: str) -> str:
     """
-    Если word — существительное без артикля (с большой буквы, одно слово),
-    определяет род и множественное число через Groq.
-    Возвращает строку вида 'das Buch, die Bücher'.
-    Если артикль уже есть, слово многословное или это не существительное —
-    возвращает word без изменений.
+    Определяет артикль и форму множественного числа через Groq.
+    - Нет артикля, заглавная буква → определяем всё
+    - Есть артикль, нет запятой (нет мн.ч.) → добираем мн.ч.
+    - Уже есть артикль и мн.ч. (есть запятая) → не трогаем
+    - Не существительное / многословное → не трогаем
     """
     word = word.strip()
     if not word:
         return word
+
+    # Уже полностью заполнено: "die Ampel, die Ampeln"
+    if "," in word:
+        return word
+
     parts = word.split()
-    if parts[0].lower() in ("der", "die", "das"):
-        return word  # артикль уже есть
+    has_article = parts[0].lower() in ("der", "die", "das")
+
+    if has_article:
+        # Есть артикль, но нет множественного числа — добираем мн.ч.
+        bare = " ".join(parts[1:])
+        forms = lookup_noun_forms(bare)
+        if forms:
+            _, plural = forms
+            if plural:
+                return f"{word}, {plural}"
+        return word  # мн.ч. нет или не удалось определить
+
     if len(parts) > 1:
-        return word  # многословное выражение — не трогаем
+        return word  # многословное выражение без артикля — не трогаем
+
     if not word[0].isupper():
-        return word  # по орфографии немецкого — не существительное
+        return word  # не существительное по орфографии
+
     forms = lookup_noun_forms(word)
     if forms:
         article, plural = forms
         if plural:
             return f"{article} {word}, {plural}"
         return f"{article} {word}"
-    return word  # не удалось определить — оставляем как есть (на ревью)
+    return word  # не удалось определить — оставляем на ревью
 
 
 # ---------- Пример предложения + перевод (Groq AI) ----------
