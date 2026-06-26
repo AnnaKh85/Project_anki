@@ -122,21 +122,48 @@ def main():
     words = fetch_sheet_words()
     logger.info("В таблице найдено %d слов.", len(words))
 
-    added, skipped, failed = 0, 0, 0
+    added, updated, skipped, failed = 0, 0, 0, 0
     total = len(words)
     for i, word in enumerate(words, start=1):
         logger.info("[%d/%d] Слово: %r", i, total, word)
         bare_for_check = lookups.bare_word(word)
 
-        logger.info("  -> проверяю, нет ли уже такой карточки в Anki...")
+        logger.info("  -> проверяю наличие карточки в Anki...")
         try:
-            if ac.word_exists(bare_for_check):
-                logger.info("     уже есть в Anki, пропускаю.")
-                skipped += 1
-                continue
+            existing = ac.find_word_notes(bare_for_check)
         except ac.AnkiConnectError as e:
             logger.error("%s", e)
             return  # Anki недоступна — нет смысла продолжать
+
+        if existing:
+            note_info = existing[0]
+            note_tags = note_info.get("tags", [])
+            if config.TAG_NEEDS_REVIEW in note_tags:
+                logger.info("     найдена с тегом needs-review — перезаполняю...")
+                try:
+                    fields, needs_review, bare = build_fields(word)
+                    attach_media(fields, bare, fields[config.FIELD_SENTENCE], needs_review)
+
+                    nid = note_info["noteId"]
+                    ac.update_note_fields(nid, fields)
+                    ac.remove_tags([nid], config.TAG_NEEDS_REVIEW)
+                    if needs_review:
+                        ac.add_tags([nid], config.TAG_NEEDS_REVIEW)
+
+                    updated += 1
+                    note_msg = " (на проверку: " + ", ".join(needs_review) + ")" if needs_review else ""
+                    logger.info("  ~ Обновлено: %s%s", fields[config.FIELD_WORD], note_msg)
+                except ac.AnkiConnectError as e:
+                    logger.error("Ошибка Anki при обновлении %r: %s", word, e)
+                    failed += 1
+                except Exception as e:
+                    logger.exception("Не удалось обновить %r: %s", word, e)
+                    failed += 1
+            else:
+                logger.info("     уже есть в Anki, тег needs-review отсутствует — пропускаю.")
+                skipped += 1
+            time.sleep(config.REQUEST_DELAY)
+            continue
 
         try:
             fields, needs_review, bare = build_fields(word)
@@ -152,8 +179,8 @@ def main():
             note_id = ac.add_note(fields, tags)
             logger.info("  -> add_note вернул note_id=%s", note_id)
             added += 1
-            note = " (на проверку: " + ", ".join(needs_review) + ")" if needs_review else ""
-            logger.info("  + Добавлено: %s%s", fields[config.FIELD_WORD], note)
+            note_msg = " (на проверку: " + ", ".join(needs_review) + ")" if needs_review else ""
+            logger.info("  + Добавлено: %s%s", fields[config.FIELD_WORD], note_msg)
         except ac.AnkiConnectError as e:
             logger.error("Ошибка Anki для %r: %s", word, e)
             failed += 1
@@ -161,9 +188,10 @@ def main():
             logger.exception("Не удалось обработать %r (%s): %s", word, type(e).__name__, e)
             failed += 1
 
-        time.sleep(config.REQUEST_DELAY)  # вежливая пауза для бесплатных API
+        time.sleep(config.REQUEST_DELAY)
 
-    logger.info("Готово: добавлено %d, пропущено (уже есть) %d, ошибок %d.", added, skipped, failed)
+    logger.info("Готово: добавлено %d, обновлено %d, пропущено %d, ошибок %d.",
+                added, updated, skipped, failed)
 
 
 if __name__ == "__main__":
